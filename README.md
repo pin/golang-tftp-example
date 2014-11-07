@@ -1,7 +1,7 @@
-golang-tftp-example
+Golang TFTP Example
 ===================
 
-Simple TFTP server and client that is an example of using Golang TFTP library.
+Simple TFTP server and client serving as an example of using Golang TFTP library.
 
 See https://github.com/pin/tftp
 
