@@ -14,7 +14,7 @@ How to build
 	$ cd src/memtftpd
 	$ go get
 	$ # optionally build a client
-	$ go cd ../gotftp
+	$ cd ../gotftp
 	$ go install
 	$ cd ../../bin
 
