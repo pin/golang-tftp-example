@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	addrStr := flag.String("s", "localhost:2269", "Server address")
+	addrStr := flag.String("s", "localhost:69", "Server address")
 	pathStr := flag.String("p", "<path>", "Local file path")
 	filenameStr := flag.String("n", "<filename>", "Name of the file on server")
 	operation := flag.String("o", "<get|put>", "What to do: download or upload file")
