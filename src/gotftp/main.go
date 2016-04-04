@@ -1,94 +1,89 @@
-package main;
+package main
 
 import (
-	"github.com/pin/tftp"
-	"net"
+	"flag"
 	"fmt"
 	"os"
-	"log"
-	"io"
-	"bufio"
-	"flag"
+
+	"github.com/pin/tftp"
 )
 
 func main() {
-	addrStr := flag.String("s", "localhost:69", "Server address")
-	pathStr := flag.String("p", "<path>", "Local file path")
-	filenameStr := flag.String("n", "<filename>", "Name of the file on server")
+	addr := flag.String("s", ":69", "Server address")
+	path := flag.String("p", "<path>", "Local file path")
+	filename := flag.String("n", "<filename>", "Name of the file on server")
 	operation := flag.String("o", "<get|put>", "What to do: download or upload file")
 	mode := flag.String("m", "octet", "Transfer mode: 'octet' or 'netascii'")
 	flag.Parse()
-	if *pathStr == "<path>" {
-		fmt.Fprintf(os.Stderr, "missing local path!\n\n");
+	if *path == "<path>" {
+		fmt.Fprintf(os.Stderr, "missing local path!\n\n")
 		flag.Usage()
 		os.Exit(1)
 	}
-	if *filenameStr == "<filename>" {
-		fmt.Fprintf(os.Stderr, "missing filename!\n\n");
+	if *filename == "<filename>" {
+		fmt.Fprintf(os.Stderr, "missing filename!\n\n")
 		flag.Usage()
 		os.Exit(1)
 	}
 	if *mode != "netascii" && *mode != "octet" {
-		fmt.Fprintf(os.Stderr, "invalid mode: %s\n\n", *mode);
+		fmt.Fprintf(os.Stderr, "invalid mode: %s\n\n", *mode)
 		flag.Usage()
 		os.Exit(1)
 	}
 	if *operation == "put" {
-		putFile(*addrStr, *pathStr, *filenameStr, *mode, *pathStr)
+		err := send(*addr, *path, *filename, *mode)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
 	} else if *operation == "get" {
-		getFile(*addrStr, *pathStr, *filenameStr, *mode, *pathStr)
+		err := receive(*addr, *path, *filename, *mode)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
 	} else {
-		fmt.Fprintf(os.Stderr, "missing or invalid operation!\n\n");
+		fmt.Fprintf(os.Stderr, "missing or invalid operation!\n\n")
 		flag.Usage()
 		os.Exit(1)
 	}
 }
 
-func putFile(addrStr string, pathStr string, filename string, mode string, path string) {
-	addr, e := net.ResolveUDPAddr("udp", addrStr)
-	if e != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", e)
-		return
+func send(addr string, path string, filename string, mode string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
 	}
-	file, e := os.Open(pathStr)
-	if e != nil {
-		panic(e)
+	c, err := tftp.NewClient(addr)
+	if err != nil {
+		return err
 	}
-	r := bufio.NewReader(file)
-	log := log.New(os.Stderr, "", log.Ldate | log.Ltime)
-	c := tftp.Client{addr, log}
-	c.Put(filename, mode, func(writer *io.PipeWriter) {
-		n, writeError := r.WriteTo(writer)
-		if writeError != nil {
-			fmt.Fprintf(os.Stderr, "Can't put %s: %v\n", filename, writeError);
-		} else {
-			fmt.Fprintf(os.Stderr, "Put %s (%d bytes)\n", filename, n);
-		}
-		writer.Close()
-	})
+	r, err := c.Send(filename, mode)
+	if err != nil {
+		return err
+	}
+	n, err := r.ReadFrom(file)
+	fmt.Printf("%d bytes sent\n", n)
+	return nil
 }
 
-func getFile(addrStr string, pathStr string, filename string, mode string, path string) {
-	addr, e := net.ResolveUDPAddr("udp", addrStr)
-	if e != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", e)
-		return
+func receive(addr string, path string, filename string, mode string) error {
+	c, err := tftp.NewClient(addr)
+	if err != nil {
+		return err
 	}
-	file, e := os.Create(pathStr)
-	if e != nil {
-		panic(e)
+	w, err := c.Receive(filename, mode)
+	if err != nil {
+		return err
 	}
-	w := bufio.NewWriter(file)
-	log := log.New(os.Stderr, "", log.Ldate | log.Ltime)
-	c := tftp.Client{addr, log}
-	c.Get(filename, mode, func(reader *io.PipeReader) {
-		n, readError := w.ReadFrom(reader)
-		if readError != nil {
-			fmt.Fprintf(os.Stderr, "Can't get %s: %v\n", filename, readError);
-		} else {
-			fmt.Fprintf(os.Stderr, "Got %s (%d bytes)\n", filename, n);
-		}
-		w.Flush()
-		file.Close()
-	})
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	n, err := w.WriteTo(file)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%d bytes received\n", n)
+	return nil
 }

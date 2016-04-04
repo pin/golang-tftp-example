@@ -1,64 +1,66 @@
 package main
 
 import (
-	"fmt"
-	"github.com/pin/tftp"
-	"net"
-	"io"
 	"bytes"
 	"flag"
+	"fmt"
+	"io"
 	"os"
-	"log"
+	"sync"
+
+	"github.com/pin/tftp"
 )
 
-var m map[string][]byte
-
-func HandleWrite(filename string, r *io.PipeReader) {
-	_, exists := m[filename]
-	if exists {
-		r.CloseWithError(fmt.Errorf("File already exists: %s", filename))
-		return
-	}
-	buffer := &bytes.Buffer{}
-	c, e := buffer.ReadFrom(r)
-	if e != nil {
-		fmt.Fprintf(os.Stderr, "Can't receive %s: %v\n", filename, e)
-	} else {
-		fmt.Fprintf(os.Stderr, "Received %s (%d bytes)\n", filename, c)
-		m[filename] = buffer.Bytes()
-	}
-}
-
-func HandleRead(filename string, w *io.PipeWriter) {
-	b, exists := m[filename]
-	if exists {
-		buffer := bytes.NewBuffer(b)
-		c, e := buffer.WriteTo(w)
-		if e != nil {
-			fmt.Fprintf(os.Stderr, "Can't send %s: %v\n", filename, e)
-		} else {
-			fmt.Fprintf(os.Stderr, "Sent %s (%d bytes)\n", filename, c)
-		}
-		w.Close()
-	} else {
-		w.CloseWithError(fmt.Errorf("File not exists: %s", filename))
-	}
-}
-
 func main() {
-	m = make(map[string][]byte)
-	addrStr := flag.String("l", ":69", "Address to listen")
+	addr := flag.String("l", ":69", "Address to listen")
 	flag.Parse()
-	addr, e := net.ResolveUDPAddr("udp", *addrStr)
-	if e != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", e)
-		return
+	b := &backend{}
+	b.m = make(map[string][]byte)
+	s := tftp.NewServer(b.handleRead, b.handleWrite)
+	err := s.ListenAndServe(*addr)
+	if err != nil {
+		fmt.Fprintf(os.Stdout, "server: %v\n", err)
+		os.Exit(1)
 	}
-	log := log.New(os.Stderr, "", log.Ldate | log.Ltime)
-	s := tftp.Server{addr, HandleWrite, HandleRead, log}
-	e = s.Serve()
-	if e != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", e)
-		os.Exit(1);
+}
+
+type backend struct {
+	m  map[string][]byte
+	mu sync.Mutex
+}
+
+func (b *backend) handleWrite(filename string, wt io.WriterTo) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	_, ok := b.m[filename]
+	if ok {
+		fmt.Fprintf(os.Stderr, "file %s already exists\n", filename)
+		return fmt.Errorf("file already exists")
 	}
+	buf := &bytes.Buffer{}
+	n, err := wt.WriteTo(buf)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "can't receive %s: %v\n", filename, err)
+		return err
+	}
+	b.m[filename] = buf.Bytes()
+	fmt.Fprintf(os.Stderr, "received %s (%d bytes)\n", filename, n)
+	return nil
+}
+
+func (b *backend) handleRead(filename string, rf io.ReaderFrom) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	bs, ok := b.m[filename]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "file %s not found\n", filename)
+		return fmt.Errorf("file not found")
+	}
+	n, err := rf.ReadFrom(bytes.NewBuffer(bs))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "can't send %s: %v\n", filename, err)
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "sent %s (%d bytes)\n", filename, n)
+	return nil
 }
