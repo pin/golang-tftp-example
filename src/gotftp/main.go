@@ -1,94 +1,103 @@
 package main;
 
 import (
-	"github.com/pin/tftp"
-	"net"
+	"github.com/pin/tftp/v3"
 	"fmt"
 	"os"
-	"log"
-	"io"
-	"bufio"
 	"flag"
 )
 
+func putFile(addr string, localPath string, remoteFilename string, mode string) error {
+	c, err := tftp.NewClient(addr)
+	if err != nil {
+		return fmt.Errorf("connecting %s: %v", addr, err)
+	}
+	file, err := os.Open(localPath)
+	if err != nil {
+		return fmt.Errorf("can't open %s: %v", localPath, err)
+	}
+	rf, err := c.Send(remoteFilename, mode)
+	if err != nil {
+		return fmt.Errorf("starting transfer: %v", err)
+	}
+	n, err := rf.ReadFrom(file)
+	if err != nil {
+		return fmt.Errorf("transferring %s: %v", remoteFilename, err)
+	}
+	fmt.Printf("%d bytes sent\n", n)
+	return nil
+}
+
+func getFile(addr string, localPath string, localFilename string, mode string) error {
+	c, err := tftp.NewClient(addr)
+	if err != nil {
+		return fmt.Errorf("connecting %s: %v", addr, err)
+	}
+	wt, err := c.Receive(localFilename, mode)
+	if err != nil {
+		return fmt.Errorf("requesting transfer: %v", err)
+	}
+	file, err := os.Create(localPath)
+	if err != nil {
+		return fmt.Errorf("creating %s: %v", localPath, err)
+	}
+	// Optionally obtain transfer size before actual data.
+	if n, ok := wt.(tftp.IncomingTransfer).Size(); ok {
+		fmt.Printf("Transfer size: %d\n", n)
+	}
+	n, err := wt.WriteTo(file)
+	if err != nil {
+		fmt.Errorf("receiving %s: %v", localFilename, err)
+	}
+	fmt.Printf("%d bytes received.\n", n)
+	return nil
+}
+
 func main() {
-	addrStr := flag.String("s", "localhost:69", "Server address")
-	pathStr := flag.String("p", "<path>", "Local file path")
-	filenameStr := flag.String("n", "<filename>", "Name of the file on server")
-	operation := flag.String("o", "<get|put>", "What to do: download or upload file")
-	mode := flag.String("m", "octet", "Transfer mode: 'octet' or 'netascii'")
+	addr := flag.String("a", "localhost:69", "Server address")
+	localPath := flag.String("l", "", "Local file path")
+	remoteFilename := flag.String("r", "", "Remote filename")
+	putOperation := flag.Bool("p", false, "Upload (aka PUT) transfer")
+	getOperation := flag.Bool("g", false, "Download (aka GET) transfer")
+	mode := flag.String("m", "octet", "Mode of transfer: 'octet' or 'netascii'")
 	flag.Parse()
-	if *pathStr == "<path>" {
-		fmt.Fprintf(os.Stderr, "missing local path!\n\n");
+	
+	if *localPath == "" {
+		fmt.Fprintf(os.Stderr, "Error: Local file path is missing.\n\n");
 		flag.Usage()
 		os.Exit(1)
 	}
-	if *filenameStr == "<filename>" {
-		fmt.Fprintf(os.Stderr, "missing filename!\n\n");
+	if *remoteFilename == "" {
+		fmt.Fprintf(os.Stderr, "Error: Remote filename is missing.\n\n")
 		flag.Usage()
 		os.Exit(1)
 	}
 	if *mode != "netascii" && *mode != "octet" {
-		fmt.Fprintf(os.Stderr, "invalid mode: %s\n\n", *mode);
+		fmt.Fprintf(os.Stderr, "Invalid mode: %s\n\n", *mode)
 		flag.Usage()
 		os.Exit(1)
 	}
-	if *operation == "put" {
-		putFile(*addrStr, *pathStr, *filenameStr, *mode, *pathStr)
-	} else if *operation == "get" {
-		getFile(*addrStr, *pathStr, *filenameStr, *mode, *pathStr)
+	if *getOperation && *putOperation {
+		fmt.Fprintf(os.Stderr, "Error: Upload and download at once is confusing. Choose one.\n\n")
+		flag.Usage()
+		os.Exit(1)
+	}
+	
+	if *putOperation {
+		err := putFile(*addr, *localPath, *remoteFilename, *mode)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Uploading: %v\n", err)
+			os.Exit(3)
+		}
+	} else if *getOperation {
+		err := getFile(*addr, *localPath, *remoteFilename, *mode)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Downloading: %v\n", err)
+			os.Exit(2)
+		}
 	} else {
-		fmt.Fprintf(os.Stderr, "missing or invalid operation!\n\n");
+		fmt.Fprintf(os.Stderr, "Error: Choose upload or download.\n\n")
 		flag.Usage()
 		os.Exit(1)
 	}
-}
-
-func putFile(addrStr string, pathStr string, filename string, mode string, path string) {
-	addr, e := net.ResolveUDPAddr("udp", addrStr)
-	if e != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", e)
-		return
-	}
-	file, e := os.Open(pathStr)
-	if e != nil {
-		panic(e)
-	}
-	r := bufio.NewReader(file)
-	log := log.New(os.Stderr, "", log.Ldate | log.Ltime)
-	c := tftp.Client{addr, log}
-	c.Put(filename, mode, func(writer *io.PipeWriter) {
-		n, writeError := r.WriteTo(writer)
-		if writeError != nil {
-			fmt.Fprintf(os.Stderr, "Can't put %s: %v\n", filename, writeError);
-		} else {
-			fmt.Fprintf(os.Stderr, "Put %s (%d bytes)\n", filename, n);
-		}
-		writer.Close()
-	})
-}
-
-func getFile(addrStr string, pathStr string, filename string, mode string, path string) {
-	addr, e := net.ResolveUDPAddr("udp", addrStr)
-	if e != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", e)
-		return
-	}
-	file, e := os.Create(pathStr)
-	if e != nil {
-		panic(e)
-	}
-	w := bufio.NewWriter(file)
-	log := log.New(os.Stderr, "", log.Ldate | log.Ltime)
-	c := tftp.Client{addr, log}
-	c.Get(filename, mode, func(reader *io.PipeReader) {
-		n, readError := w.ReadFrom(reader)
-		if readError != nil {
-			fmt.Fprintf(os.Stderr, "Can't get %s: %v\n", filename, readError);
-		} else {
-			fmt.Fprintf(os.Stderr, "Got %s (%d bytes)\n", filename, n);
-		}
-		w.Flush()
-		file.Close()
-	})
 }
