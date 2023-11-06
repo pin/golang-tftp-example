@@ -1,10 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/pin/tftp/v3"
 	"io"
-	"bytes"
 	"os"
 	"time"
 )
@@ -19,7 +19,7 @@ func writeHandler(filename string, wt io.WriterTo) error {
 		return fmt.Errorf("File already exists: %s", filename)
 	}
 	buffer := &bytes.Buffer{}
-	_,err := wt.WriteTo(buffer)
+	_, err := wt.WriteTo(buffer)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't receive %s: %v\n", filename, err)
 		return err
@@ -42,9 +42,9 @@ func readHandler(filename string, rt io.ReaderFrom) error {
 	return nil
 }
 
-
 // Hook for logging on every transfer completion or failure.
-type logHook struct {}
+type logHook struct{}
+
 func (h *logHook) OnSuccess(stats tftp.TransferStats) {
 	fmt.Printf("Transfer of %s to %s complete\n", stats.Filename, stats.RemoteAddr)
 }
