@@ -1,30 +1,48 @@
-Golang TFTP Example
-===================
+# Golang TFTP Example
 
-Simple TFTP server and client serving as an example of using Golang TFTP library.
+Simple TFTP server and client serving as an example of using [Golang TFTP library: github.com/pin/tftp](https://github.com/pin/tftp).
 
-See https://github.com/pin/tftp
+# Get the code and build binaries
 
-How to build
-------------
+Check out the examples:
+```
+git clone git@github.com:pin/golang-tftp-example.git
+```
 
-	$ git clone https://github.com/pin/golang-tftp-example.git
-	$ cd golang-tftp-example
-	$ export GOPATH=`pwd`
-	$ cd src/memtftpd
-	$ go get
-	$ # optionally build a client
-	$ cd ../gotftp
-	$ go install
-	$ cd ../../bin
+Build client:
+```
+cd golang-tftp-example/src/gotftp
+```
+```
+go install
+```
 
-How to run
-----------
+Build server:
+```
+cd golang-tftp-example/src/gotftpd
+```
+```
+go install
+```
 
-	$ ./memtftpd -l=:2269 # it will try to listen to port 69 by default
-	...
-	$ # put file '/etc/passwd' to the server with name 'secret'
-	$ ./gotftp -s=localhost:2269 -p /etc/passwd -n secret -o put
-	$ # get it back
-	$ ./gotftp -s=localhost:2269 -p /dev/stdout -n secret -o get
- 
+# Running server and client
+
+Start server:
+```
+~/go/bin/gotftpd -p 6969 # Use custom port instead of default port 69 that requires root premission
+```
+It will use the current directory as document root.
+
+Upload file:
+```
+~/go/bin/gotftp -a localhost:6969 -p -l /etc/passwd -r secret_file
+```
+
+Download file back:
+```
+~/go/bin/gotftp -a localhost:6969 -g -r secret_file -l /dev/stdout
+```
+
+# Auchtung!
+
+This code is for example only, e.g. filenames are interpreted as paths as is and not sanitized.
