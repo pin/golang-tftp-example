@@ -54,12 +54,13 @@ func (h *logHook) OnFailure(stats tftp.TransferStats, err error) {
 
 func main() {
 	port := flag.Int("p", 69, "Local port to listen")
+	flag.Parse()
 
 	// Start the server.
 	s := tftp.NewServer(readHandler, writeHandler)
 	s.SetHook(&logHook{})
 	go func() {
-		err := s.ListenAndServe(fmt.Sprintf(":%d", port))
+		err := s.ListenAndServe(fmt.Sprintf(":%d", *port))
 		if err != nil {
 			fmt.Fprintf(os.Stdout, "Can't start the server: %v\n", err)
 			os.Exit(1)
