@@ -3,8 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/pin/tftp/v3"
 	"os"
+
+	"github.com/pin/tftp/v3"
 )
 
 func putFile(addr string, localPath string, remoteFilename string, mode string) error {
@@ -47,7 +48,7 @@ func getFile(addr string, localPath string, localFilename string, mode string) e
 	}
 	n, err := wt.WriteTo(file)
 	if err != nil {
-		fmt.Errorf("receiving %s: %v", localFilename, err)
+		return fmt.Errorf("receiving %s: %v", localFilename, err)
 	}
 	fmt.Printf("%d bytes received.\n", n)
 	return nil
