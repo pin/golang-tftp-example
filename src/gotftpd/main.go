@@ -17,6 +17,7 @@ func readHandler(filename string, rf io.ReaderFrom) error {
 		fmt.Fprintf(os.Stderr, "opening %s: %v\n", filename, err)
 		return err
 	}
+	defer file.Close()
 	n, err := rf.ReadFrom(file)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "reading %s: %v\n", filename, err)
@@ -33,6 +34,7 @@ func writeHandler(filename string, wt io.WriterTo) error {
 		fmt.Fprintf(os.Stderr, "creating %s: %v\n", filename, err)
 		return err
 	}
+	defer file.Close()
 	n, err := wt.WriteTo(file)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "writing %s: %v\n", filename, err)

@@ -17,6 +17,7 @@ func putFile(addr string, localPath string, remoteFilename string, mode string) 
 	if err != nil {
 		return fmt.Errorf("can't open %s: %v", localPath, err)
 	}
+	defer file.Close()
 	rf, err := c.Send(remoteFilename, mode)
 	if err != nil {
 		return fmt.Errorf("starting transfer: %v", err)
@@ -42,6 +43,7 @@ func getFile(addr string, localPath string, localFilename string, mode string) e
 	if err != nil {
 		return fmt.Errorf("creating %s: %v", localPath, err)
 	}
+	defer file.Close()
 	// Optionally obtain transfer size before actual data.
 	if n, ok := wt.(tftp.IncomingTransfer).Size(); ok {
 		fmt.Printf("Transfer size: %d\n", n)
